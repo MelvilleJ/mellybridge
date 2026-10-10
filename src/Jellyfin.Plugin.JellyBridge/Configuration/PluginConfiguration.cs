@@ -69,6 +69,11 @@ public class PluginConfiguration : BasePluginConfiguration
         { nameof(AddDuplicateContent), true },
         { nameof(NetworkFolderPrefix), string.Empty },
 
+        // Download Progress
+        { nameof(ShowRequestProgress), true },
+        { nameof(NotifyOnAvailable), true },
+        { nameof(DownloadMonitorIntervalSeconds), 60 },
+
         // Customize Promo Videos
         { nameof(CustomMoviesPromo), string.Empty },
         { nameof(DefaultMoviesPromo), true },
@@ -215,6 +220,23 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the prefix for streaming service libraries.
     /// </summary>
     public string NetworkFolderPrefix { get; set; } = string.Empty;
+
+    // ===== Download Progress =====
+    /// <summary>
+    /// When enabled, requested items stay visible in the JellyBridge library until they are available,
+    /// with their request and download status shown at the top of the overview.
+    /// </summary>
+    public bool? ShowRequestProgress { get; set; }
+
+    /// <summary>
+    /// When enabled, the requesting user's Jellyfin sessions get a pop-up message once their request is available.
+    /// </summary>
+    public bool? NotifyOnAvailable { get; set; }
+
+    /// <summary>
+    /// Gets or sets how often, in seconds, Jellyseerr is polled for request and download status.
+    /// </summary>
+    public int? DownloadMonitorIntervalSeconds { get; set; }
 
     // ===== Customize Promo Videos =====
     /// <summary>

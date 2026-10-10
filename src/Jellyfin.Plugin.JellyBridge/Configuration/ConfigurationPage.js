@@ -36,6 +36,9 @@ export default function (view) {
             
             // Initialize manage discover library settings
             initializeManageFavorites(page);
+
+            // Initialize download progress settings and active request list
+            initializeDownloadProgress(page);
             
             // Initialize upload promo video
             initializeUploadPromo(page);
@@ -1284,6 +1287,107 @@ function initializeManageFavorites(page) {
     });
 }
 
+// ==========================================
+// DOWNLOAD PROGRESS FUNCTIONS
+// ==========================================
+
+let downloadProgressInterval = null;
+
+function initializeDownloadProgress(page) {
+    setInputField(page, 'ShowRequestProgress', true);
+    setInputField(page, 'NotifyOnAvailable', true);
+    setInputField(page, 'DownloadMonitorIntervalSeconds');
+
+    page.querySelector('#refreshDownloadProgress').addEventListener('click', function() {
+        loadDownloadProgress(page, true);
+    });
+
+    // Only poll while the section is open
+    const section = page.querySelector('#downloadProgress');
+    section.addEventListener('toggle', function() {
+        if (downloadProgressInterval) {
+            clearInterval(downloadProgressInterval);
+            downloadProgressInterval = null;
+        }
+        if (section.open) {
+            loadDownloadProgress(page);
+            downloadProgressInterval = setInterval(() => loadDownloadProgress(page), 10000);
+        }
+    });
+}
+
+function loadDownloadProgress(page, refresh = false) {
+    return ApiClient.ajax({
+        url: ApiClient.getUrl(refresh ? 'JellyBridge/DownloadProgress/Refresh' : 'JellyBridge/DownloadProgress'),
+        type: refresh ? 'POST' : 'GET',
+        data: refresh ? '{}' : undefined,
+        contentType: refresh ? 'application/json' : undefined,
+        dataType: 'json'
+    }).then(function(snapshot) {
+        renderDownloadProgress(page, snapshot);
+    }).catch(function(error) {
+        console.error('Failed to get download progress:', error);
+        renderDownloadProgress(page, { enabled: true, error: 'Failed to get download progress', items: [] });
+    });
+}
+
+function renderDownloadProgress(page, snapshot) {
+    const list = page.querySelector('#downloadProgressList');
+    const times = page.querySelector('#downloadProgressTimes');
+    list.replaceChildren();
+
+    const addMessage = (text) => {
+        const message = document.createElement('div');
+        message.className = 'fieldDescription';
+        message.textContent = text;
+        list.appendChild(message);
+    };
+
+    if (!snapshot.enabled) {
+        addMessage('⏸️ Download progress and notifications are both disabled.');
+    } else if (snapshot.error) {
+        addMessage('❌ ' + snapshot.error);
+    } else if (!snapshot.updatedAt) {
+        addMessage('⏳ Waiting for the first check. Use 🔄 to check now.');
+    } else if (!snapshot.items || snapshot.items.length === 0) {
+        addMessage('✅ No requests in progress.');
+    }
+
+    (snapshot.items || []).forEach(function(item) {
+        const row = document.createElement('div');
+        row.className = 'downloadProgressItem';
+
+        const title = document.createElement('div');
+        title.className = 'downloadProgressTitle';
+        title.textContent = (item.mediaType === 'tv' ? '📺 ' : '🎬 ') + item.title + (item.is4k ? ' (4K)' : '');
+        row.appendChild(title);
+
+        if (item.percent !== null && item.percent !== undefined) {
+            const bar = document.createElement('div');
+            bar.className = 'itemProgressBar';
+            const fill = document.createElement('div');
+            fill.className = 'itemProgressBarForeground';
+            fill.style.width = Math.round(item.percent) + '%';
+            bar.appendChild(fill);
+            row.appendChild(bar);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'downloadProgressMeta';
+        let metaText = item.statusText;
+        if (item.requestedBy) metaText += ` • Requested by ${item.requestedBy}`;
+        if (item.estimatedCompletion) metaText += ` • ETA ${new Date(item.estimatedCompletion).toLocaleString()}`;
+        meta.textContent = metaText;
+        row.appendChild(meta);
+
+        list.appendChild(row);
+    });
+
+    times.textContent = snapshot.updatedAt
+        ? `Last checked: ${new Date(snapshot.updatedAt).toLocaleString()}`
+        : '';
+}
+
 function generateLibraryFolders(page) {
     // Call GenerateLibraryFolders endpoint
     return ApiClient.ajax({
@@ -1505,6 +1609,9 @@ function performPluginReset(page) {
                 UseMixedMediaLibrary: null,
                 UseNetworkFolders: null,
                 NetworkFolderPrefix: '',
+                ShowRequestProgress: null,
+                NotifyOnAvailable: null,
+                DownloadMonitorIntervalSeconds: null,
                 AddDuplicateContent: null,
                 ManageJellyBridgeLibrary: null,
                 CustomMoviesPromo: null,
@@ -1639,6 +1746,7 @@ function savePluginConfiguration(page) {
         if (!validateField(page, 'MaxRetentionDays', validators.int, 'Max Retention Days must be a positive integer').isValid) return;
         if (!validateField(page, 'StartupDelaySeconds', validators.int, 'Startup Delay must be a positive integer').isValid) return;
         if (!validateField(page, 'TaskTimeoutMinutes', validators.int, 'Task Timeout must be a positive integer').isValid) return;
+        if (!validateField(page, 'DownloadMonitorIntervalSeconds', validators.int, 'Check Interval must be a positive integer').isValid) return;
         if (!validateField(page, 'PromoVideoDurationSeconds', validators.int, 'Promo Video Duration must be a positive integer').isValid) return;
         if (!validateField(page, 'NetworkFolderPrefix', validators.windowsFilename, 'Library Prefix contains invalid characters. Cannot start with a space or contain: \\ / : * ? " < > |').isValid) return;
         return true;
@@ -1671,6 +1779,9 @@ function savePluginConfiguration(page) {
     form.UseNetworkFolders = nullIfDefault(page.querySelector('#UseNetworkFolders').checked, config.ConfigDefaults.UseNetworkFolders);
     form.AddDuplicateContent = nullIfDefault(page.querySelector('#AddDuplicateContent').checked, config.ConfigDefaults.AddDuplicateContent);
     form.NetworkFolderPrefix = safeParseString(page.querySelector('#NetworkFolderPrefix'), false);
+    form.ShowRequestProgress = nullIfDefault(page.querySelector('#ShowRequestProgress').checked, config.ConfigDefaults.ShowRequestProgress);
+    form.NotifyOnAvailable = nullIfDefault(page.querySelector('#NotifyOnAvailable').checked, config.ConfigDefaults.NotifyOnAvailable);
+    form.DownloadMonitorIntervalSeconds = safeParseInt(page.querySelector('#DownloadMonitorIntervalSeconds'));
     form.EnableStartupSync = nullIfDefault(page.querySelector('#EnableStartupSync').checked, config.ConfigDefaults.EnableStartupSync);
     form.CustomMoviesPromo = safeParseString(page.querySelector('#CustomMoviesPromo'));
     form.DefaultMoviesPromo = nullIfDefault(page.querySelector('#DefaultMoviesPromo').checked, config.ConfigDefaults.DefaultMoviesPromo);

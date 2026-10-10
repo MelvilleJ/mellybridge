@@ -27,8 +27,42 @@ public class JellyseerrMediaRequest : MediaRequest
     //public new Media Media { get; set; } = new();
     [JsonPropertyName("media")]
     public new JellyseerrMedia Media { get; set; } = new();
-    
+
+    /// <summary>
+    /// Requesting user - override to use the filtered user shape returned by the API
+    /// </summary>
+    [JsonPropertyName("requestedBy")]
+    public new JellyseerrUser? RequestedBy { get; set; }
+
     // All other properties inherit from base class with correct types and JSON names
+
+    /// <summary>
+    /// Media status for the quality tier this request targets (4K requests track Status4k).
+    /// </summary>
+    [JsonIgnore]
+    public JellyseerrModel.MediaStatus? TargetMediaStatus => Media == null ? null : (Is4k ? Media.Status4k : Media.Status);
+
+    /// <summary>
+    /// Active downloads for the quality tier this request targets.
+    /// </summary>
+    [JsonIgnore]
+    public List<JellyseerrDownloadingItem> TargetDownloads =>
+        (Is4k ? Media?.DownloadStatus4kList : Media?.DownloadStatusList)?.Where(d => d != null).ToList() ?? new();
+
+    /// <summary>
+    /// True once at least part of the requested media can be watched in Jellyfin.
+    /// Partially available counts so that first-season-only requests resolve.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsMediaReady => TargetMediaStatus is JellyseerrModel.MediaStatus.AVAILABLE or JellyseerrModel.MediaStatus.PARTIALLY_AVAILABLE;
+
+    /// <summary>
+    /// True while the request is still waiting on approval, a release search, or a download.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsInProgress => !IsMediaReady
+        && Status is not (JellyseerrModel.MediaRequestStatus.DECLINED or JellyseerrModel.MediaRequestStatus.FAILED or JellyseerrModel.MediaRequestStatus.COMPLETED)
+        && TargetMediaStatus is not (JellyseerrModel.MediaStatus.BLACKLISTED or JellyseerrModel.MediaStatus.DELETED);
     
     /// <summary>
     /// Tests if this request matches an IJellyfinItem by comparing TMDB IDs and media types.

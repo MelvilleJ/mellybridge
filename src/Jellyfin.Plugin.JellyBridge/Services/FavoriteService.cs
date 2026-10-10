@@ -268,21 +268,37 @@ public class FavoriteService
         List<(JellyfinUser user, IJellyfinItem item)> pending)> FilterRequestsFromFavorites(
         List<(JellyfinUser user, IJellyfinItem item)> allFavorites)
     {
-        var requested = new List<(JellyfinUser user, IJellyfinItem item)>();
-        var pending = new List<(JellyfinUser user, IJellyfinItem item)>();
         try
         {
             var requestsResult = await _apiService.CallEndpointAsync(JellyseerrEndpoint.ReadRequests);
             if (requestsResult == null)
             {
                 _logger.LogError("Jellyseerr requests endpoint returned null response");
-                return (requested, pending);
+                return (new(), new());
             }
 
             var jellyseerrRequests = (List<JellyseerrMediaRequest>)requestsResult;
 
             _logger.LogDebug("Fetched {RequestCount} existing requests from Jellyseerr", jellyseerrRequests.Count);
+            return FilterRequestsFromFavorites(allFavorites, jellyseerrRequests);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to filter favorites using Jellyseerr requests");
+        }
+        return (new(), new());
+    }
 
+    private (
+        List<(JellyfinUser user, IJellyfinItem item)> requested,
+        List<(JellyfinUser user, IJellyfinItem item)> pending) FilterRequestsFromFavorites(
+        List<(JellyfinUser user, IJellyfinItem item)> allFavorites,
+        List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        var requested = new List<(JellyfinUser user, IJellyfinItem item)>();
+        var pending = new List<(JellyfinUser user, IJellyfinItem item)>();
+        try
+        {
             // Build lookups by (MediaType, TmdbId)
             var requestedLookup = new HashSet<(JellyseerrModel.MediaType type, int tmdbId)>(
                 jellyseerrRequests
@@ -342,13 +358,15 @@ public async Task<(List<IJellyseerrItem> newIgnored, List<IJellyseerrItem> clear
         var cleared = new List<IJellyseerrItem>();
 
         var removeRequested = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RemoveRequestedFromFavorites));
+        var showRequestProgress = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.ShowRequestProgress));
 
         try
         {
             // Get all existing favorites
             var allFavorites = GetUserFavorites();
 			_logger.LogDebug("Fetched {FavoriteCount} favorites for processing", allFavorites.Count);
-            var (requestedFavorites, _) = await FilterRequestsFromFavorites(allFavorites);
+            var jellyseerrRequests = await _apiService.CallEndpointAsync(JellyseerrEndpoint.ReadRequests) as List<JellyseerrMediaRequest> ?? new();
+            var (requestedFavorites, _) = FilterRequestsFromFavorites(allFavorites, jellyseerrRequests);
 			_logger.LogDebug("Identified {RequestedCount} favorites with existing Jellyseerr requests", requestedFavorites.Count);
             // Build lookup of itemId -> users who favorited it
             var itemIdToUsers = requestedFavorites
@@ -360,8 +378,22 @@ public async Task<(List<IJellyseerrItem> newIgnored, List<IJellyseerrItem> clear
 			var (matches, _) = await _bridgeService.BuildJellyseerrMatchesAsync(jellyfinItems);
 			_logger.LogDebug("Library scan produced {MatchCount} matches for ignore/unfavorite", matches.Count);
 
-            // Create ignore files for all matched Jellyfin items (always done, regardless of RemoveRequestedFromFavorites setting)
-			var (newIgnoredMatches, existingIgnored) = await _bridgeService.IgnoreMatchAsync(matches);
+            // Create ignore files for matched Jellyfin items (always done, regardless of RemoveRequestedFromFavorites setting).
+            // With request progress shown, in-progress items stay visible so the download monitor can display their status.
+            var matchesToIgnore = matches;
+            if (showRequestProgress)
+            {
+                var readyMedia = jellyseerrRequests
+                    .Where(r => r?.Media != null && r.IsMediaReady)
+                    .Select(r => (r.Media.MediaType, r.Media.TmdbId))
+                    .ToHashSet();
+                matchesToIgnore = matches
+                    .Where(m => m.JellyfinItem.GetTmdbId() is int tmdbId && readyMedia.Contains((IJellyseerrItem.GetMediaType(m.JellyfinItem), tmdbId)))
+                    .ToList();
+                _logger.LogDebug("Request progress enabled: hiding {ReadyCount} available items, keeping {InProgressCount} in-progress items visible",
+                    matchesToIgnore.Count, matches.Count - matchesToIgnore.Count);
+            }
+			var (newIgnoredMatches, existingIgnored) = await _bridgeService.IgnoreMatchAsync(matchesToIgnore);
 			newIgnored.AddRange(newIgnoredMatches);
 			_logger.LogTrace("Created/updated ignore files for matched items ({NewlyIgnored} newly ignored, {ExistingIgnored} already ignored)", 
                 newIgnoredMatches.Count, existingIgnored.Count);

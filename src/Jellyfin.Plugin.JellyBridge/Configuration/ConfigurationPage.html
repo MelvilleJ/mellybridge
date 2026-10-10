@@ -309,6 +309,19 @@
                     color: #999;
                 }
                 
+                .downloadProgressItem {
+                    margin-bottom: 12px;
+                }
+
+                .downloadProgressTitle {
+                    font-weight: bold;
+                }
+
+                .downloadProgressMeta {
+                    font-size: 0.85em;
+                    color: #999;
+                }
+
                 .taskStatusTimes {
                     font-size: 0.85em;
                     color: #888;
@@ -892,6 +905,56 @@
                             <div id="syncFavoritesResult" class="testResult emby-textarea"></div>
                         </div>
 
+                    </details>
+
+                    <br>
+
+                    <details id="downloadProgress">
+                        <summary>Download Progress</summary>
+                        <br>
+                        <div class="fieldDescription">
+                            Track Jellyseerr requests from approval through download. Download progress requires Radarr and Sonarr to be connected in Jellyseerr.
+                        </div>
+                        <div class="fieldDescription cautionText" style="margin-bottom: 16px;">
+                            👀 Display: With request progress enabled, requested items stay visible in the JellyBridge library until they are available, instead of being hidden as soon as they are requested. Items requested before this setting was enabled stay hidden.
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="ShowRequestProgress" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox" />
+                                <span class="checkboxLabel">Show Request Progress on Items</span>
+                                <span class="checkboxOutline">
+                                    <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                            <div class="fieldDescription">Adds a status line, such as <code>⬇ Downloading 42% (about 1h 5m left)</code>, to the top of each requested item's overview so it shows in every Jellyfin client, including Android TV and Kodi.</div>
+                        </div>
+
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="NotifyOnAvailable" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox" />
+                                <span class="checkboxLabel">Notify When Available</span>
+                                <span class="checkboxOutline">
+                                    <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                            <div class="fieldDescription">Shows a pop-up message in the requester's open Jellyfin apps when their request is ready to watch. Users who are offline get the message the next time they open Jellyfin, for up to 7 days. Some clients, like Kodi, may not display these messages.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="DownloadMonitorIntervalSeconds" label="Check Interval (seconds)" min="15" max="3600" step="1"/>
+                            <div class="fieldDescription">How often to check Jellyseerr for request and download status. Minimum 15 seconds.</div>
+                        </div>
+
+                        <div class="taskStatusHeader">
+                            <h3>
+                                <button type="button" id="refreshDownloadProgress" is="emby-button" class="refreshButton" title="Refresh downloads">🔄</button> Active Requests
+                            </h3>
+                        </div>
+                        <div id="downloadProgressList"></div>
+                        <div id="downloadProgressTimes" class="taskStatusTimes"></div>
                     </details>
 
                     <br>

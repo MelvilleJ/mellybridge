@@ -62,6 +62,10 @@ namespace Jellyfin.Plugin.JellyBridge.Services
             // Register hosted services
             serviceCollection.AddHostedService<FavoriteEventHandler>();
 
+            // Singleton so the controller reads the same snapshot the background loop writes
+            serviceCollection.AddSingleton<DownloadMonitorService>();
+            serviceCollection.AddHostedService(provider => provider.GetRequiredService<DownloadMonitorService>());
+
             // Register controllers (organized by configuration page sections)
             serviceCollection.AddScoped<Controllers.PluginConfigurationController>();
             serviceCollection.AddScoped<Controllers.GeneralSettingsController>();
@@ -72,6 +76,7 @@ namespace Jellyfin.Plugin.JellyBridge.Services
             serviceCollection.AddScoped<Controllers.CustomizePromoController>();
             serviceCollection.AddScoped<Controllers.SortDiscoverContentController>();
             serviceCollection.AddScoped<Controllers.AdvancedSettingsController>();
+            serviceCollection.AddScoped<Controllers.DownloadProgressController>();
         }
     }
 }

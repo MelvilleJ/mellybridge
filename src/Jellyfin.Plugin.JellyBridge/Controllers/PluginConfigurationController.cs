@@ -60,6 +60,11 @@ namespace Jellyfin.Plugin.JellyBridge.Controllers
                     AddDuplicateContent = config.AddDuplicateContent,
                     NetworkFolderPrefix = config.NetworkFolderPrefix,
 
+                    // Download Progress
+                    ShowRequestProgress = config.ShowRequestProgress,
+                    NotifyOnAvailable = config.NotifyOnAvailable,
+                    DownloadMonitorIntervalSeconds = config.DownloadMonitorIntervalSeconds,
+
                     // Sort Content
                     EnableAutomatedSortTask = config.EnableAutomatedSortTask,
                     SortTaskIntervalHours = config.SortTaskIntervalHours,
@@ -151,6 +156,11 @@ namespace Jellyfin.Plugin.JellyBridge.Controllers
                     SetJsonValue<bool?>(configData, nameof(config.UseNetworkFolders), config);
                     SetJsonValue<bool?>(configData, nameof(config.AddDuplicateContent), config);
                     SetJsonValue<string>(configData, nameof(config.NetworkFolderPrefix), config);
+
+                    // Download Progress
+                    SetJsonValue<bool?>(configData, nameof(config.ShowRequestProgress), config);
+                    SetJsonValue<bool?>(configData, nameof(config.NotifyOnAvailable), config);
+                    SetJsonValue<int?>(configData, nameof(config.DownloadMonitorIntervalSeconds), config);
                     
                     // Customize Promo Videos
                     SetJsonValue<string>(configData, nameof(config.CustomMoviesPromo), config);
