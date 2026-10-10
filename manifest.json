@@ -3,11 +3,47 @@
     "guid": "8ecc808c-d6e9-432f-9219-b638fbfb37e6",
     "name": "JellyBridge",
     "description": "Bridge Jellyfin with Jellyseerr for seamless show discovery and download requests",
-    "owner": "kinggeorges12",
+    "owner": "MelvilleJ",
     "category": "Metadata",
-    "imageUrl": "https://raw.githubusercontent.com/kinggeorges12/JellyBridge/refs/heads/main/Screenshots/Icon.svg",
-    "repositoryUrl": "https://github.com/kinggeorges12/JellyBridge",
+    "imageUrl": "https://raw.githubusercontent.com/MelvilleJ/mellybridge/refs/heads/main/Screenshots/Icon.svg",
+    "repositoryUrl": "https://github.com/MelvilleJ/mellybridge",
     "versions": [
+      {
+        "version": "4.1.12.0",
+        "targetAbi": "12.0.0",
+        "timestamp": "2026-10-10T21:07:48.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.1/JellyBridge-4.1.12.0.zip",
+        "checksum": "AE6648941E965433110835353DF6AB11",
+        "changelog": "Jellyfin 12.0.0: MellyBridge v4.1 - Download progress on requested items and a pop-up when your request is ready to watch."
+      },
+      {
+        "version": "4.1.11.9",
+        "targetAbi": "10.11.9.0",
+        "timestamp": "2026-10-10T21:07:48.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.1/JellyBridge-4.1.11.9.zip",
+        "checksum": "3A0236A3279AF4561B5ADC77F773C85C",
+        "changelog": "Jellyfin 10.11.9: MellyBridge v4.1 - Download progress on requested items and a pop-up when your request is ready to watch."
+      },
+      {
+        "version": "4.1.11.0",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-10-10T21:07:48.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.1/JellyBridge-4.1.11.0.zip",
+        "checksum": "59B00C33B9698D75792E1FC8A5F6E1F6",
+        "changelog": "Jellyfin 10.11.0: MellyBridge v4.1 - Download progress on requested items and a pop-up when your request is ready to watch."
+      },
+      {
+        "version": "4.1.10.7",
+        "targetAbi": "10.10.0.0",
+        "timestamp": "2026-10-10T21:07:48.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.1/JellyBridge-4.1.10.7.zip",
+        "checksum": "CDED1BD089B4B4E43B39866F7BBB53D9",
+        "changelog": "Jellyfin 10.10.7: MellyBridge v4.1 - Download progress on requested items and a pop-up when your request is ready to watch."
+      },
       {
         "version": "4.0.12.0",
         "targetAbi": "12.0.0",
