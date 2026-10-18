@@ -24,6 +24,9 @@ public enum JellyseerrEndpoint
     // Discover endpoints (from server/routes/discover.ts)
     DiscoverMovies,
     DiscoverTv,
+
+    // Media endpoints (from server/routes/tv.ts)
+    TvDetails,
     
     // Auth endpoints (from server/routes/auth.ts)
     AuthMe,

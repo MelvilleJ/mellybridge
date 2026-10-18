@@ -284,6 +284,19 @@ public partial class SyncService
             // Add blocked items to unified collection
             result.ItemsBlocked.AddRange(blockedItems);
             
+            var seasonFavorites = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RequestIndividualSeasons))
+                ? _favoriteService.GetUserSeasonFavorites()
+                : new();
+            if (seasonFavorites.Count > 0)
+            {
+                _logger.LogDebug("Step 5b: Requesting {Count} favorited seasons", seasonFavorites.Count);
+                result.ItemsProcessed.AddRange(seasonFavorites.Select(fav => fav.season.Series));
+                var existingRequests = await _apiService.CallEndpointAsync(JellyseerrEndpoint.ReadRequests) as List<JellyseerrMediaRequest> ?? new();
+                var (seasonRequests, blockedSeasons) = await _favoriteService.RequestSeasonFavoritesAsync(seasonFavorites, jellyseerrUsers, existingRequests);
+                result.ItemsCreated.AddRange(seasonRequests);
+                result.ItemsBlocked.AddRange(blockedSeasons);
+            }
+
             // Step 6: For requested items, unmark as favorite for the user and create an .ignore file in each bridge item directory
             _logger.LogDebug("Step 6: Unfavoriting requested items and creating ignore files");
             var (newlyIgnoredItems, clearedItems) = await _favoriteService.ClearAndIgnoreRequestedAsync();
@@ -296,6 +309,9 @@ public partial class SyncService
             var declinedItems = await _favoriteService.UnignoreDeclinedRequests();
             result.ItemsUnhidden.AddRange(declinedItems);
             _logger.LogDebug("Step 7: Unhidden {UnhiddenCount} declined items", declinedItems.Count);
+
+            _logger.LogDebug("Step 8: Hiding discover items and seasons that are now available");
+            await ApplyRequestStatusAsync(result, seasonFavorites);
 
             // Step 9: Provide refresh plan back to caller; orchestration occurs after both syncs complete
             // Only set refresh plan if there are added items or hidden items
@@ -337,5 +353,58 @@ public partial class SyncService
         
         return result;
     }
-}
 
+    /// <summary>
+    /// Updates discover item visibility from Jellyseerr request status without creating new requests.
+    /// Used when a request finishes downloading, so the item disappears without waiting for the next sync.
+    /// Note: Caller is responsible for locking.
+    /// </summary>
+    public async Task<SyncJellyfinResult> SyncRequestStatus()
+    {
+        var result = new SyncJellyfinResult();
+        try
+        {
+            var seasonFavorites = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RequestIndividualSeasons))
+                ? _favoriteService.GetUserSeasonFavorites()
+                : new();
+            await ApplyRequestStatusAsync(result, seasonFavorites);
+            if (result.ItemsHidden.Count > 0 || result.ItemsUnhidden.Count > 0)
+            {
+                result.Refresh = new RefreshPlan
+                {
+                    CreateRefresh = result.ItemsUnhidden.Count > 0,
+                    RemoveRefresh = result.ItemsHidden.Count > 0,
+                    RefreshImages = false
+                };
+            }
+
+            result.Success = true;
+            result.Message = "✅ Request status sync completed successfully";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during request status sync");
+            result.Success = false;
+            result.Message = $"❌ Request status sync failed: {ex.Message}";
+        }
+
+        return result;
+    }
+
+    private async Task ApplyRequestStatusAsync(SyncJellyfinResult result, List<(JellyfinUser user, JellyfinSeason season)> seasonFavorites)
+    {
+        var requests = await _apiService.CallEndpointAsync(JellyseerrEndpoint.ReadRequests) as List<JellyseerrMediaRequest> ?? new();
+        result.ItemsHidden.AddRange(await _favoriteService.HideAvailableRequestsAsync(requests));
+
+        if (!Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RequestIndividualSeasons)))
+        {
+            return;
+        }
+
+        var clearedSeasons = await _favoriteService.ClearRequestedSeasonFavoritesAsync(seasonFavorites, requests);
+        _logger.LogDebug("Cleared {ClearedCount} requested season favorites", clearedSeasons);
+        var (hiddenSeasons, unhiddenSeasons) = await _favoriteService.ReconcileSeasonVisibilityAsync(requests);
+        result.ItemsHidden.AddRange(hiddenSeasons);
+        result.ItemsUnhidden.AddRange(unhiddenSeasons);
+    }
+}

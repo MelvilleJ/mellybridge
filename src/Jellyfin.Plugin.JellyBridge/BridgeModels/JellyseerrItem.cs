@@ -28,7 +28,7 @@ public interface IJellyseerrItem
         return item switch
         {
             JellyfinMovie => JellyseerrModel.MediaType.MOVIE,
-            JellyfinSeries => JellyseerrModel.MediaType.TV,
+            JellyfinSeries or JellyfinSeason => JellyseerrModel.MediaType.TV,
             _ => throw new NotSupportedException($"Unsupported item type: {item.GetType().Name}")
         };
     }
@@ -43,7 +43,7 @@ public interface IJellyseerrItem
         return item switch
         {
             JellyfinMovie => JellyseerrModel.Permission.REQUEST_4K_MOVIE,
-            JellyfinSeries => JellyseerrModel.Permission.REQUEST_4K_TV,
+            JellyfinSeries or JellyfinSeason => JellyseerrModel.Permission.REQUEST_4K_TV,
             _ => throw new NotSupportedException($"Unsupported item type: {item.GetType().Name}")
         };
     }

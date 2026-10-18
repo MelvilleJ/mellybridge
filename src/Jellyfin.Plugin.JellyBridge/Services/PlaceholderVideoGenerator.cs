@@ -36,6 +36,7 @@ public class PlaceholderVideoGenerator
     
     // Season folder name
     private static readonly string SeasonFolderName = "Season 00";
+    private static readonly System.Text.RegularExpressions.Regex SeasonPlaceholderPattern = new(@"^S(\d+)E9999\.mp4$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     // Dictionary mapping media types to their corresponding asset file names
     private static readonly Dictionary<string, string> EmbeddedAsset = new Dictionary<string, string>
@@ -88,6 +89,18 @@ public class PlaceholderVideoGenerator
         var targetFile = GetVideoFilename(SeasonAsset);
         return await GeneratePlaceholderAsync(seasonFolderPath, targetFile, SeasonAsset);
     }
+
+    /// <summary>
+    /// Generate a placeholder episode in a numbered season folder so the season can be favorited and requested.
+    /// Episode 9999 keeps the placeholder from matching a real episode's metadata.
+    /// </summary>
+    public async Task<bool> GeneratePlaceholderSeasonAsync(string showFolderPath, int seasonNumber)
+    {
+        var seasonFolderPath = Path.Combine(showFolderPath, GetSeasonFolderName(seasonNumber));
+        return await GeneratePlaceholderAsync(seasonFolderPath, $"S{seasonNumber:00}E9999{AssetExtension}", SeasonAsset);
+    }
+
+    public static string GetSeasonFolderName(int seasonNumber) => $"Season {seasonNumber:00}";
 
     /// <summary>
     /// Ensures a cached placeholder video exists in the system temp directory for the given asset.
@@ -557,6 +570,7 @@ public class PlaceholderVideoGenerator
                         // Regenerate based on asset type
                         var movieFile = Path.Combine(directoryName, GetVideoFilename(MovieAsset));
                         var seriesFile = Path.Combine(directoryName, GetVideoFilename(SeasonAsset));
+                        var seasonMatch = SeasonPlaceholderPattern.Match(Path.GetFileName(existingFile));
                         if (File.Exists(movieFile))
                         {
                             // For movies, the placeholder is in the movie folder itself
@@ -568,6 +582,12 @@ public class PlaceholderVideoGenerator
                             // For series, we need to get the show folder (parent of the season folder)
                             var parentFolderPath = FolderUtils.GetExistingFolderOrThrow(Path.GetDirectoryName(directoryName) ?? string.Empty);
                             await GeneratePlaceholderSeasonAsync(parentFolderPath);
+                            taskSuccessSeries.Add(existingFile);
+                        }
+                        else if (seasonMatch.Success)
+                        {
+                            var parentFolderPath = FolderUtils.GetExistingFolderOrThrow(Path.GetDirectoryName(directoryName) ?? string.Empty);
+                            await GeneratePlaceholderSeasonAsync(parentFolderPath, int.Parse(seasonMatch.Groups[1].Value));
                             taskSuccessSeries.Add(existingFile);
                         }
                         else

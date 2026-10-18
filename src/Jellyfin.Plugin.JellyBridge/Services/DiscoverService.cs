@@ -112,6 +112,39 @@ public class DiscoverService
 
     #region Created
     
+    private const int SeasonLookupConcurrency = 4;
+
+    /// <summary>
+    /// Creates a placeholder in each aired season folder of a show. Specials are skipped since Season 00 holds the show's own placeholder.
+    /// </summary>
+    private async Task CreateSeasonPlaceholdersAsync(int tmdbId, string showName, string showFolderPath, SemaphoreSlim lookupLimit)
+    {
+        TvDetails? details;
+        await lookupLimit.WaitAsync();
+        try
+        {
+            details = await _apiService.CallEndpointAsync(JellyseerrEndpoint.TvDetails,
+                templates: new Dictionary<string, string> { ["tvId"] = tmdbId.ToString() }) as TvDetails;
+        }
+        finally
+        {
+            lookupLimit.Release();
+        }
+
+        var seasonNumbers = details?.Seasons
+            .Where(season => season != null && season.SeasonNumber > 0 && season.EpisodeCount > 0)
+            .Select(season => season.SeasonNumber)
+            .ToList() ?? new();
+        if (seasonNumbers.Count == 0)
+        {
+            _logger.LogDebug("No aired seasons found for {ShowName} (TMDB {TmdbId}); skipping season placeholders", showName, tmdbId);
+            return;
+        }
+
+        await Task.WhenAll(seasonNumbers.Select(n => _placeholderVideoGenerator.GeneratePlaceholderSeasonAsync(showFolderPath, n)));
+        _logger.LogTrace("Created {SeasonCount} season placeholders for {ShowName}", seasonNumbers.Count, showName);
+    }
+
     /// <summary>
     /// Creates placeholder videos for the provided unmatched items.
     /// </summary>
@@ -122,6 +155,8 @@ public class DiscoverService
         var processedItems = new List<TJellyseerr>();
         var tasks = new List<Task>();
         var seenFolders = new HashSet<string>();
+        var requestIndividualSeasons = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RequestIndividualSeasons));
+        using var seasonLookupLimit = new SemaphoreSlim(SeasonLookupConcurrency);
         
         _logger.LogDebug("Processing {UnmatchedCount} unmatched items for placeholder creation", 
             unmatchedItems.Count);
@@ -147,6 +182,10 @@ public class DiscoverService
                 else if (item is JellyseerrShow)
                 {
                     tasks.Add(_placeholderVideoGenerator.GeneratePlaceholderSeasonAsync(folderPath));
+                    if (requestIndividualSeasons)
+                    {
+                        tasks.Add(CreateSeasonPlaceholdersAsync(item.Id, item.MediaName, folderPath, seasonLookupLimit));
+                    }
                 }
                 
                 processedItems.Add(item);

@@ -50,11 +50,43 @@ public class JellyseerrMediaRequest : MediaRequest
         (Is4k ? Media?.DownloadStatus4kList : Media?.DownloadStatusList)?.Where(d => d != null).ToList() ?? new();
 
     /// <summary>
-    /// True once at least part of the requested media can be watched in Jellyfin.
-    /// Partially available counts so that first-season-only requests resolve.
+    /// Season numbers this request asks for. Empty for movies.
     /// </summary>
     [JsonIgnore]
-    public bool IsMediaReady => TargetMediaStatus is JellyseerrModel.MediaStatus.AVAILABLE or JellyseerrModel.MediaStatus.PARTIALLY_AVAILABLE;
+    public List<int> RequestedSeasonNumbers =>
+        Seasons?.Where(s => s != null).Select(s => s.SeasonNumber).Distinct().ToList() ?? new();
+
+    /// <summary>
+    /// Availability of one season for the quality tier this request targets, or null if Jellyseerr has no record of it.
+    /// </summary>
+    public JellyseerrModel.MediaStatus? GetTargetSeasonStatus(int seasonNumber)
+    {
+        var season = Media?.Seasons?.FirstOrDefault(s => s != null && s.SeasonNumber == seasonNumber);
+        return season == null ? null : (Is4k ? season.Status4k : season.Status);
+    }
+
+    public static bool IsReadyStatus(JellyseerrModel.MediaStatus? status) =>
+        status is JellyseerrModel.MediaStatus.AVAILABLE or JellyseerrModel.MediaStatus.PARTIALLY_AVAILABLE;
+
+    /// <summary>
+    /// True once the requested media can be watched in Jellyfin. For series this means every requested season,
+    /// so a request for season 3 is not resolved by season 1 already being in the library.
+    /// Partially available seasons count so that airing seasons resolve.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsMediaReady
+    {
+        get
+        {
+            var seasonNumbers = RequestedSeasonNumbers;
+            if (seasonNumbers.Count > 0 && Media?.Seasons?.Count > 0)
+            {
+                return seasonNumbers.All(n => IsReadyStatus(GetTargetSeasonStatus(n)));
+            }
+
+            return IsReadyStatus(TargetMediaStatus);
+        }
+    }
 
     /// <summary>
     /// True while the request is still waiting on approval, a release search, or a download.

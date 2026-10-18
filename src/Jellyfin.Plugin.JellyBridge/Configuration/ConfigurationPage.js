@@ -1275,6 +1275,7 @@ function initializeManageFavorites(page) {
     setInputField(page, 'RemoveRequestedFromFavorites', true);
     setInputField(page, 'UserPermissionRequest4k', true);
     setInputField(page, 'RequestFirstSeason', true);
+    setInputField(page, 'RequestIndividualSeasons', true);
     setInputField(page, 'UseMixedMediaLibrary', true);
     setInputField(page, 'UseNetworkFolders', true);
     setInputField(page, 'AddDuplicateContent', true);
@@ -1606,6 +1607,7 @@ function performPluginReset(page) {
                 RemoveRequestedFromFavorites: null,
                 UserPermissionRequest4k: null,
                 RequestFirstSeason: null,
+                RequestIndividualSeasons: null,
                 UseMixedMediaLibrary: null,
                 UseNetworkFolders: null,
                 NetworkFolderPrefix: '',
@@ -1775,6 +1777,7 @@ function savePluginConfiguration(page) {
     form.RemoveRequestedFromFavorites = nullIfDefault(page.querySelector('#RemoveRequestedFromFavorites').checked, config.ConfigDefaults.RemoveRequestedFromFavorites);
     form.UserPermissionRequest4k = nullIfDefault(page.querySelector('#UserPermissionRequest4k').checked, config.ConfigDefaults.UserPermissionRequest4k);
     form.RequestFirstSeason = nullIfDefault(page.querySelector('#RequestFirstSeason').checked, config.ConfigDefaults.RequestFirstSeason);
+    form.RequestIndividualSeasons = nullIfDefault(page.querySelector('#RequestIndividualSeasons').checked, config.ConfigDefaults.RequestIndividualSeasons);
     form.UseMixedMediaLibrary = nullIfDefault(page.querySelector('#UseMixedMediaLibrary').checked, config.ConfigDefaults.UseMixedMediaLibrary);
     form.UseNetworkFolders = nullIfDefault(page.querySelector('#UseNetworkFolders').checked, config.ConfigDefaults.UseNetworkFolders);
     form.AddDuplicateContent = nullIfDefault(page.querySelector('#AddDuplicateContent').checked, config.ConfigDefaults.AddDuplicateContent);

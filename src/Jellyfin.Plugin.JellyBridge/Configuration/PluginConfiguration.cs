@@ -64,6 +64,7 @@ public class PluginConfiguration : BasePluginConfiguration
         { nameof(RemoveRequestedFromFavorites), false },
         { nameof(UserPermissionRequest4k), true },
         { nameof(RequestFirstSeason), false },
+        { nameof(RequestIndividualSeasons), false },
         { nameof(UseMixedMediaLibrary), true },
         { nameof(UseNetworkFolders), false },
         { nameof(AddDuplicateContent), true },
@@ -200,6 +201,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// When enabled, requests will only be made for the first season of a show.
     /// </summary>
     public bool? RequestFirstSeason { get; set; }
+
+    /// <summary>
+    /// When enabled, discover series get a folder for each season so users can favorite and request individual seasons.
+    /// </summary>
+    public bool? RequestIndividualSeasons { get; set; }
 
     /// <summary>
     /// Gets or sets whether to use media type folders for movies and series.

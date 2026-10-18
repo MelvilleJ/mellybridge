@@ -676,6 +676,257 @@ public async Task<(List<IJellyseerrItem> newIgnored, List<IJellyseerrItem> clear
         return results;
     }
 
+    /// <summary>
+    /// Hides discover items whose media is now in the library: movies once available, and series once their requested
+    /// seasons are available. With individual season requests, a series is hidden only once every season is available,
+    /// since its remaining seasons can still be requested. Skipped when discover items may duplicate main library items.
+    /// </summary>
+    public async Task<List<IJellyseerrItem>> HideAvailableRequestsAsync(List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        var newlyHidden = new List<IJellyseerrItem>();
+        if (!Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.ExcludeFromMainLibraries)))
+        {
+            return newlyHidden;
+        }
+
+        var requestIndividualSeasons = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RequestIndividualSeasons));
+        try
+        {
+            var availableMedia = jellyseerrRequests
+                .Where(r => r?.Media != null && r.Media.TmdbId > 0)
+                .Where(r => requestIndividualSeasons && r.Media.MediaType == JellyseerrModel.MediaType.TV
+                    ? r.TargetMediaStatus == JellyseerrModel.MediaStatus.AVAILABLE
+                    : r.IsMediaReady)
+                .Select(r => (r.Media.MediaType, r.Media.TmdbId))
+                .ToHashSet();
+            if (availableMedia.Count == 0)
+            {
+                return newlyHidden;
+            }
+
+            var (movies, shows) = await _metadataService.ReadMetadataAsync();
+            var items = movies.Cast<IJellyseerrItem>().Concat(shows)
+                .Where(item => availableMedia.Contains((item is JellyseerrMovie ? JellyseerrModel.MediaType.MOVIE : JellyseerrModel.MediaType.TV, item.Id)));
+            foreach (var item in items)
+            {
+                var dir = _metadataService.GetJellyBridgeItemDirectory(item);
+                var ignorePath = Path.Combine(dir, BridgeService.IgnoreFileName);
+                if (!Directory.Exists(dir) || File.Exists(ignorePath))
+                {
+                    continue;
+                }
+
+                await _bridgeService.CreateIgnoreFileAsync(ignorePath, null);
+                newlyHidden.Add(item);
+                _logger.LogTrace("Hid available item {ItemName} at {Dir}", item.MediaName, dir);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed hiding available requests");
+        }
+
+        _logger.LogDebug("Hid {Count} discover items that are now available", newlyHidden.Count);
+        return newlyHidden;
+    }
+
+    #endregion
+
+    #region Seasons
+
+    /// <summary>
+    /// Get favorited seasons of JellyBridge series for all users.
+    /// </summary>
+    public List<(JellyfinUser user, JellyfinSeason season)> GetUserSeasonFavorites()
+    {
+        return _userDataManager.GetUserSeasonFavorites(_userManager, _libraryManager)
+            .SelectMany(kv => kv.Value.Select(season => (kv.Key, season)))
+            .Where(fav => !string.IsNullOrEmpty(fav.season.Path) && FolderUtils.IsPathInSyncDirectory(fav.season.Path))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Seasons that should not be requested again: part of an active request, or already in the library.
+    /// </summary>
+    private static HashSet<(int tmdbId, int seasonNumber)> GetCoveredSeasons(List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        var covered = new HashSet<(int tmdbId, int seasonNumber)>();
+        foreach (var request in jellyseerrRequests.Where(r => r?.Media != null && r.Media.MediaType == JellyseerrModel.MediaType.TV))
+        {
+            if (request.Status != JellyseerrModel.MediaRequestStatus.DECLINED)
+            {
+                covered.UnionWith(request.RequestedSeasonNumbers.Select(n => (request.Media.TmdbId, n)));
+            }
+
+            covered.UnionWith(request.Media.Seasons
+                .Where(s => s != null && JellyseerrMediaRequest.IsReadyStatus(s.Status))
+                .Select(s => (request.Media.TmdbId, s.SeasonNumber)));
+        }
+
+        return covered;
+    }
+
+    /// <summary>
+    /// Requests favorited seasons that are not already covered. A season favorited by several users is requested once,
+    /// and each user's seasons of the same series are sent as one request.
+    /// </summary>
+    public async Task<(List<JellyseerrMediaRequest> created, List<IJellyfinItem> blocked)> RequestSeasonFavoritesAsync(
+        List<(JellyfinUser user, JellyfinSeason season)> seasonFavorites,
+        List<JellyseerrUser> jellyseerrUsers,
+        List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        var created = new List<JellyseerrMediaRequest>();
+        var blocked = new List<IJellyfinItem>();
+        var userPermissionRequest4k = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.UserPermissionRequest4k));
+        var covered = GetCoveredSeasons(jellyseerrRequests);
+        var jellyseerrUserLookup = jellyseerrUsers
+            .Where(u => !string.IsNullOrEmpty(u.JellyfinUserGuid))
+            .ToDictionary(u => u.JellyfinUserGuid!, u => u);
+
+        var seasonRequests = seasonFavorites
+            .Where(f => f.season.GetTmdbId().HasValue && !covered.Contains((f.season.GetTmdbId()!.Value, f.season.SeasonNumber)))
+            .Select(f => (jellyseerrUser: jellyseerrUserLookup.GetValueOrDefault(f.user.Id.ToString()), f.season))
+            .Where(f => f.jellyseerrUser != null)
+            .GroupBy(f => (tmdbId: f.season.GetTmdbId()!.Value, f.season.SeasonNumber))
+            .Select(g => g.First())
+            .GroupBy(f => (f.jellyseerrUser!.Id, tmdbId: f.season.GetTmdbId()!.Value));
+
+        foreach (var group in seasonRequests)
+        {
+            var user = group.First().jellyseerrUser!;
+            var series = group.First().season.Series;
+            var seasonNumbers = group.Select(f => f.season.SeasonNumber).OrderBy(n => n).ToList();
+            var requestParams = new Dictionary<string, object>
+            {
+                ["mediaType"] = JellyseerrModel.MediaType.TV.ToString().ToLower(),
+                ["mediaId"] = group.Key.tmdbId,
+                ["userId"] = user.Id,
+                ["seasons"] = seasonNumbers
+            };
+            if (userPermissionRequest4k)
+            {
+                requestParams["is4k"] = PermissionHelper.HasPermission(JellyseerrModel.Permission.REQUEST_4K_TV, user.Permissions);
+            }
+
+            try
+            {
+                var request = await _apiService.CallEndpointAsync(JellyseerrEndpoint.CreateRequest, parameters: requestParams) as JellyseerrMediaRequest;
+                if (request != null && request.Id != 0)
+                {
+                    created.Add(request);
+                    _logger.LogDebug("Requested {SeriesName} seasons {Seasons} on behalf of {UserName}",
+                        series.Name, string.Join(", ", seasonNumbers), user.JellyfinUsername ?? user.Username);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to request {SeriesName} seasons {Seasons} - no valid response from Jellyseerr",
+                        series.Name, string.Join(", ", seasonNumbers));
+                    blocked.Add(series);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to request {SeriesName} seasons {Seasons}", series.Name, string.Join(", ", seasonNumbers));
+                blocked.Add(series);
+            }
+        }
+
+        return (created, blocked);
+    }
+
+    /// <summary>
+    /// Unfavorites seasons that are now covered by a request, when Remove Requested From Favorites is enabled.
+    /// </summary>
+    public async Task<int> ClearRequestedSeasonFavoritesAsync(
+        List<(JellyfinUser user, JellyfinSeason season)> seasonFavorites,
+        List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        if (!Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.RemoveRequestedFromFavorites)))
+        {
+            return 0;
+        }
+
+        var covered = GetCoveredSeasons(jellyseerrRequests);
+        var cleared = 0;
+        foreach (var (user, season) in seasonFavorites.Where(f => f.season.GetTmdbId() is int tmdbId && covered.Contains((tmdbId, f.season.SeasonNumber))))
+        {
+            if (await _userDataManager.TryUnfavoriteAsync(_libraryManager, user, season))
+            {
+                cleared++;
+            }
+        }
+
+        return cleared;
+    }
+
+    /// <summary>
+    /// Shows or hides each season folder of discover series that have requests. A season is hidden once it is available,
+    /// or as soon as it is requested when request progress is off. Declined seasons are shown again.
+    /// </summary>
+    public async Task<(List<IJellyseerrItem> hidden, List<IJellyseerrItem> unhidden)> ReconcileSeasonVisibilityAsync(List<JellyseerrMediaRequest> jellyseerrRequests)
+    {
+        var hidden = new List<IJellyseerrItem>();
+        var unhidden = new List<IJellyseerrItem>();
+        var showRequestProgress = Plugin.GetConfigOrDefault<bool>(nameof(PluginConfiguration.ShowRequestProgress));
+        var requestsByShow = jellyseerrRequests
+            .Where(r => r?.Media != null && r.Media.MediaType == JellyseerrModel.MediaType.TV && r.Media.TmdbId > 0)
+            .GroupBy(r => r.Media.TmdbId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        try
+        {
+            var (_, shows) = await _metadataService.ReadMetadataAsync();
+            foreach (var show in shows)
+            {
+                var showDir = _metadataService.GetJellyBridgeItemDirectory(show);
+                if (!Directory.Exists(showDir))
+                {
+                    continue;
+                }
+
+                // A failed requests call looks like no requests, so never unhide a series that has none.
+                if (!requestsByShow.TryGetValue(show.Id, out var showRequests))
+                {
+                    continue;
+                }
+
+                foreach (var seasonDir in Directory.GetDirectories(showDir, "Season *"))
+                {
+                    if (!int.TryParse(Path.GetFileName(seasonDir)["Season ".Length..], out var seasonNumber) || seasonNumber == 0)
+                    {
+                        continue;
+                    }
+
+                    var isAvailable = showRequests.Any(r => JellyseerrMediaRequest.IsReadyStatus(r.GetTargetSeasonStatus(seasonNumber)));
+                    var isRequested = showRequests.Any(r => r.Status != JellyseerrModel.MediaRequestStatus.DECLINED && r.RequestedSeasonNumbers.Contains(seasonNumber));
+                    var shouldHide = isAvailable || (isRequested && !showRequestProgress);
+
+                    var ignorePath = Path.Combine(seasonDir, BridgeService.IgnoreFileName);
+                    var isHidden = File.Exists(ignorePath);
+                    if (shouldHide && !isHidden)
+                    {
+                        await _bridgeService.CreateIgnoreFileAsync(ignorePath, null);
+                        hidden.Add(show);
+                        _logger.LogTrace("Hid {ShowName} season {Season}", show.MediaName, seasonNumber);
+                    }
+                    else if (!shouldHide && isHidden)
+                    {
+                        File.Delete(ignorePath);
+                        unhidden.Add(show);
+                        _logger.LogTrace("Unhid {ShowName} season {Season}", show.MediaName, seasonNumber);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed updating season visibility");
+        }
+
+        _logger.LogDebug("Season visibility updated: {Hidden} seasons hidden, {Unhidden} seasons shown", hidden.Count, unhidden.Count);
+        return (hidden.Distinct().ToList(), unhidden.Distinct().ToList());
+    }
+
     #endregion
 
 }

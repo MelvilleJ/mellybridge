@@ -897,6 +897,17 @@
                             </label>
                             <div class="fieldDescription">New favorited series will only request the first season, rather than the default of all seasons. This is useful for users who only want to limit the space used by initial series requests. Any additional season requests must be made from the Jellyseerr interface.</div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="RequestIndividualSeasons" type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox" />
+                                <span class="checkboxLabel">Request Individual Seasons</span>
+                                <span class="checkboxOutline">
+                                    <span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>
+                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                            <div class="fieldDescription">Adds a folder for each season to discover series. Favorite a season to request only that season, or favorite the series to request it as before. Seasons that are already available are hidden, and the series is hidden once every season is available. Takes effect on the next discover sync.</div>
+                        </div>
 
                         <div>
                             <button is="emby-button" type="button" id="syncFavorites" class="raised button block emby-button">

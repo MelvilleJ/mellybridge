@@ -229,6 +229,13 @@ public class ApiService
             description: "Discover TV shows"
         ),
         
+        [JellyseerrEndpoint.TvDetails] = new JellyseerrEndpointConfig(
+            "/api/v1/tv/{tvId}",
+            typeof(JellyseerrModel.Server.TvDetails),
+            requiresTemplateValues: true,
+            description: "Get TV show details including seasons"
+        ),
+        
         // Auth endpoints - use user response
         [JellyseerrEndpoint.AuthMe] = new JellyseerrEndpointConfig(
             "/api/v1/auth/me",

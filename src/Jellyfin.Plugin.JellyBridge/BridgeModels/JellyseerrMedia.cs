@@ -93,10 +93,10 @@ public class JellyseerrMedia : Media
     public List<JellyseerrMediaRequest> JellyseerrRequests { get; set; } = new();
 
     /// <summary>
-    /// Seasons - Not used in Jellyseerr API responses
+    /// Per-season availability for TV media, returned with requests.
     /// </summary>
-    [JsonIgnore]
-    public new List<Season>? Seasons { get; set; } = new();
+    [JsonPropertyName("seasons")]
+    public new List<Season> Seasons { get; set; } = new();
 
     /// <summary>
     /// Issues - Not used in Jellyseerr API responses

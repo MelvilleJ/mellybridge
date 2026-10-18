@@ -23,6 +23,7 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
     private const string StateFileName = "download-monitor.json";
     private const int MinimumIntervalSeconds = 15;
     private const long NotificationTimeoutMs = 15000;
+    private const int MaxSeasonsInTitle = 3;
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan TitleCacheLifetime = TimeSpan.FromHours(1);
     private static readonly TimeSpan UndeliveredLifetime = TimeSpan.FromDays(7);
@@ -36,6 +37,7 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
     private DateTimeOffset _titleCacheCreated = DateTimeOffset.MinValue;
     // Status lines persist in the Jellyfin database across restarts, so assume they may exist until one cleanup pass has run.
     private bool _overviewsMayHaveStatus = true;
+    private HashSet<int>? _lastInProgressIds;
     private CancellationTokenSource? _stopping;
     private Task? _loop;
 
@@ -148,6 +150,10 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
             Snapshot = new DownloadProgressSnapshot { Enabled = true, UpdatedAt = DateTimeOffset.UtcNow, Items = progress };
             _logger.LogDebug("Download monitor found {Count} in-progress requests", progress.Count);
 
+            var inProgressIds = progress.Select(p => p.RequestId).ToHashSet();
+            var requestFinished = _lastInProgressIds?.Any(id => !inProgressIds.Contains(id)) == true;
+            _lastInProgressIds = inProgressIds;
+
             if (showProgress)
             {
                 await UpdateOverviewsAsync(jellyfinItems, progress, cancellationToken).ConfigureAwait(false);
@@ -157,6 +163,11 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
             if (notify)
             {
                 await ProcessNotificationsAsync(requests, titles, libraryManager, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (requestFinished)
+            {
+                _ = SyncRequestStatusAsync();
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -289,6 +300,29 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
         return _titleCache;
     }
 
+    /// <summary>
+    /// Hides finished requests from the discover library now instead of at the next scheduled sync.
+    /// </summary>
+    private async Task SyncRequestStatusAsync()
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var syncService = scope.ServiceProvider.GetRequiredService<SyncService>();
+            var refreshService = scope.ServiceProvider.GetRequiredService<RefreshService>();
+            await Plugin.ExecuteWithLockAsync(async () =>
+            {
+                var result = await syncService.SyncRequestStatus().ConfigureAwait(false);
+                await refreshService.ApplyRefreshAsync(result).ConfigureAwait(false);
+                return result.Success;
+            }, _logger, "Sync Request Status").ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update discover library after a request finished");
+        }
+    }
+
     #endregion
 
     #region Item Overviews
@@ -390,7 +424,7 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
             {
                 RequestId = request.Id,
                 UserId = userId,
-                Title = GetAvailableTitle(request, titles, libraryManager),
+                Title = GetAvailableTitle(request, titles, libraryManager) + GetSeasonSuffix(request),
                 ReadyAt = DateTimeOffset.UtcNow
             });
         }
@@ -416,6 +450,17 @@ public sealed class DownloadMonitorService : IHostedService, IDisposable
         }
 
         return titles.GetValueOrDefault((request.Media.MediaType, request.Media.TmdbId)) ?? "Your request";
+    }
+
+    private static string GetSeasonSuffix(JellyseerrMediaRequest request)
+    {
+        var seasons = request.RequestedSeasonNumbers.OrderBy(n => n).ToList();
+        return seasons.Count switch
+        {
+            0 or > MaxSeasonsInTitle => string.Empty,
+            1 => $" Season {seasons[0]}",
+            _ => $" Seasons {string.Join(", ", seasons)}"
+        };
     }
 
     /// <summary>

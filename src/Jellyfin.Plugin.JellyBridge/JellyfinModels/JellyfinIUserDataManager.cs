@@ -82,6 +82,31 @@ public class JellyfinIUserDataManager : WrapperBase<IUserDataManager>
     }
 
     /// <summary>
+    /// Get all favorited seasons for all users from Jellyfin. Seasons without a season number or parent series are skipped.
+    /// </summary>
+    public Dictionary<JellyfinUser, List<JellyfinSeason>> GetUserSeasonFavorites(JellyfinIUserManager userManager, JellyfinILibraryManager libraryManager)
+    {
+        var userFavorites = new Dictionary<JellyfinUser, List<JellyfinSeason>>();
+        foreach (var user in userManager.GetAllUsers())
+        {
+            var userFavs = libraryManager.Inner.GetItemList(new InternalItemsQuery(user.Inner)
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Season },
+                IsFavorite = true,
+                Recursive = true
+            });
+
+            userFavorites[user] = userFavs
+                .OfType<Season>()
+                .Select(JellyfinSeason.FromSeason)
+                .OfType<JellyfinSeason>()
+                .ToList();
+        }
+
+        return userFavorites;
+    }
+
+    /// <summary>
     /// Unfavorite the item for the given user using wrappers.
     /// GetUserData automatically creates user data if it doesn't exist in both 10.10 and 10.11.
     /// </summary>
