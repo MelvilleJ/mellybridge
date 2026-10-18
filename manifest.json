@@ -9,6 +9,42 @@
     "repositoryUrl": "https://github.com/MelvilleJ/mellybridge",
     "versions": [
       {
+        "version": "4.2.12.0",
+        "targetAbi": "12.0.0",
+        "timestamp": "2026-10-18T15:55:55.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.2/JellyBridge-4.2.12.0.zip",
+        "checksum": "4B16BC7C593DB90199C9BDAF9B9921C3",
+        "changelog": "Jellyfin 12.0.0: MellyBridge v4.2 - Request individual seasons by favoriting them, and discover items are hidden as soon as their download finishes."
+      },
+      {
+        "version": "4.2.11.9",
+        "targetAbi": "10.11.9.0",
+        "timestamp": "2026-10-18T15:55:55.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.2/JellyBridge-4.2.11.9.zip",
+        "checksum": "7DC248756D12894CC955FE9A9ED5B7C9",
+        "changelog": "Jellyfin 10.11.9: MellyBridge v4.2 - Request individual seasons by favoriting them, and discover items are hidden as soon as their download finishes."
+      },
+      {
+        "version": "4.2.11.0",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-10-18T15:55:55.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.2/JellyBridge-4.2.11.0.zip",
+        "checksum": "110947D941A4CF450C3CAB2E2108B7F1",
+        "changelog": "Jellyfin 10.11.0: MellyBridge v4.2 - Request individual seasons by favoriting them, and discover items are hidden as soon as their download finishes."
+      },
+      {
+        "version": "4.2.10.7",
+        "targetAbi": "10.10.0.0",
+        "timestamp": "2026-10-18T15:55:55.000Z",
+        "dependencies": [],
+        "sourceUrl": "https://github.com/MelvilleJ/mellybridge/releases/download/v4.2/JellyBridge-4.2.10.7.zip",
+        "checksum": "14E2BAB3E2A5A283CAE3E2D77D5AADD9",
+        "changelog": "Jellyfin 10.10.7: MellyBridge v4.2 - Request individual seasons by favoriting them, and discover items are hidden as soon as their download finishes."
+      },
+      {
         "version": "4.1.12.0",
         "targetAbi": "12.0.0",
         "timestamp": "2026-10-10T21:07:48.000Z",
